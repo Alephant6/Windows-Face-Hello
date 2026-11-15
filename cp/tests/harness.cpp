@@ -538,7 +538,9 @@ int wmain(int argc, wchar_t** argv)
         s.Close();
     }
 
-    // ---- 4. opt-in autostart: selection starts the first check ----
+    // ---- 4. opt-in autostart: any key or click starts the check, selection alone must not ----
+    // The harness runs in session 0 with no keyboard, so only the "nothing starts by itself" half is
+    // checked here; the key press itself is exercised against the real LogonUI (cp/tests/logonui).
     Logf("--- scenario 4: autostart switch on");
     {
         WriteTextFile(kMockUserFile, userUtf8.c_str());
@@ -548,13 +550,13 @@ int wmain(int argc, wchar_t** argv)
         {
             BOOL unused = FALSE;
             s.credential->SetSelected(&unused);
-            Check(s.WaitChanged(15000), "with autostart, selecting the tile leads to CredentialsChanged without a submit");
-            DWORD count = 0;
-            DWORD def = 0;
-            BOOL autoLogon = FALSE;
-            s.provider->GetCredentialCount(&count, &def, &autoLogon);
-            Check(def == 0 && autoLogon == TRUE, "auto logon requested after the automatic check");
+            Check(!s.WaitChanged(3000), "with autostart, selecting the tile alone does not start a face check");
+            const std::string status = Narrow(s.credentialEvents->LastString());
+            Logf("      status shown: %s", status.c_str());
+            Check(status.find("any key") != std::string::npos, "status tells the user any key starts the check");
             CREDENTIAL_PROVIDER_CREDENTIAL_SERIALIZATION ser;
+            s.Submit(&ser);
+            Check(s.WaitChanged(15000), "the submit arrow still starts the check in autostart mode");
             Check(s.Submit(&ser) == CPGSR_RETURN_CREDENTIAL_FINISHED, "credential is returned");
             CoTaskMemFree(ser.rgbSerialization);
         }

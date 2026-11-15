@@ -56,6 +56,21 @@ foreach ($r in (Get-Content $RoundsFile -Raw | ConvertFrom-Json)) {
     Set-Content 'C:\Users\Public\mock-user.txt' $mockUser -Encoding ascii -NoNewline
     if ($r.autostart) { Set-Content 'C:\ProgramData\FaceHello\autostart.txt' '1' -Encoding ascii -NoNewline }
     else { Remove-Item 'C:\ProgramData\FaceHello\autostart.txt' -Force -ErrorAction SilentlyContinue }
+    # Optional custom tile image: "alpha" = white glyph on a transparent background, to see how
+    # LogonUI draws transparency in the sign-in option icon. Anything else = no custom image.
+    Remove-Item 'C:\ProgramData\FaceHello\*.png' -Force -ErrorAction SilentlyContinue
+    if ($r.avatar -eq 'alpha') {
+        Add-Type -AssemblyName System.Drawing
+        $bmp = New-Object System.Drawing.Bitmap(96, 96, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $g = [System.Drawing.Graphics]::FromImage($bmp); $g.SmoothingMode = 'AntiAlias'
+        $g.Clear([System.Drawing.Color]::FromArgb(0, 255, 255, 255))
+        $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, 7)
+        $g.DrawEllipse($pen, 14, 14, 68, 68)
+        $g.DrawArc($pen, 30, 34, 36, 30, 20, 140)
+        $g.FillEllipse([System.Drawing.Brushes]::White, 32, 34, 9, 9)
+        $g.FillEllipse([System.Drawing.Brushes]::White, 55, 34, 9, 9)
+        $g.Dispose(); $bmp.Save('C:\ProgramData\FaceHello\avatar.png'); $bmp.Dispose()
+    }
 
     if (LogonUiRunning) {
         # Still locked from the previous round: restart LogonUI so it enumerates providers afresh.

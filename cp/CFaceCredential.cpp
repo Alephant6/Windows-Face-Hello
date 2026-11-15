@@ -197,9 +197,11 @@ static int _ReadHotkeyVk()
     return 0;
 }
 
-// 可选开关:C:\ProgramData\FaceHello\autostart.txt 内容以 '1' 开头时,磁贴一被选中就自动
-// 开始第一次刷脸(不必再按「→」或热键)。文件不存在 = 关,保持「只由 → / 热键启动」的默认行为。
-// 只自动发起第一次;失败后的重试仍靠 → / 热键,不会循环开摄像头。
+// 可选开关:C:\ProgramData\FaceHello\autostart.txt 内容以 '1' 开头时,磁贴被选中后「任意一次
+// 按键或鼠标点击」就开始刷脸(不必专门按「→」或热键)——掀开锁屏幕布的那一下同时就是启动键。
+// 文件不存在 = 关,保持「只由 → / 热键启动」的默认行为。
+// 不做成「选中即开扫」:挂在用户下的磁贴若是上次用的登录方式,一锁屏就会被选中(幕布还盖着),
+// 那样锁屏瞬间就会开摄像头、人还在机前就又解开了(实测如此)。
 static bool _ReadAutoStart()
 {
     HANDLE h = CreateFileW(L"C:\\ProgramData\\FaceHello\\autostart.txt", GENERIC_READ,
@@ -265,6 +267,10 @@ HRESULT CFaceCredential::Initialize(CREDENTIAL_PROVIDER_USAGE_SCENARIO cpus, Aut
     _en = _IsEnglishUI();  // 读一次语言镜像,贯穿本磁贴所有文案
     _hotkeyVk = _ReadHotkeyVk();
     _autoStart = _ReadAutoStart();
+    if (_autoStart)
+    {
+        _hotkeyVk = kAnyKeyVk;  // 任意键都算启动键(已包含单独配置的热键)
+    }
     HRESULT hr = SHStrDupW(_L(L"面部解锁", L"Face Unlock"), &_rgFieldStrings[FFI_LABEL]);
     if (SUCCEEDED(hr))
     {
@@ -372,14 +378,11 @@ IFACEMETHODIMP CFaceCredential::SetSelected(BOOL* pbAutoLogon)
     EnterCriticalSection(&_cs);
     firstReady = (_authState == AuthState::Idle && _failCount == 0);
     LeaveCriticalSection(&_cs);
-    if (firstReady && _autoStart)
-    {
-        _StartAuthThread();  // 开关打开:选中即自动发起第一次刷脸
-        return S_OK;
-    }
     if (firstReady)
     {
-        _SetStatus(_L(L"按 → 开始刷脸", L"Press → to start face unlock"));
+        _SetStatus(_autoStart
+            ? _L(L"按任意键开始刷脸", L"Press any key to start face unlock")
+            : _L(L"按 → 开始刷脸", L"Press → to start face unlock"));
     }
     _StartHotkeyThread();
     return S_OK;
@@ -512,6 +515,36 @@ DWORD WINAPI CFaceCredential::_HotkeyThreadProc(LPVOID param)
 
 void CFaceCredential::_HotkeyLoop()
 {
+    if (_hotkeyVk == kAnyKeyVk)
+    {
+        // 任意键模式:先等所有键都松开(锁屏用的 Win+L 可能还按着),再等下一次按键 / 鼠标点击。
+        // 只看「当前是否按下」,不用「自上次调用后按过」那一位,免得把锁屏前的按键算进来。
+        bool armed = false;
+        for (;;)
+        {
+            if (InterlockedCompareExchange(&_hotkeyStopFlag, 0, 0) == 1)
+                return;
+            bool anyDown = false;
+            for (int vk = 0x01; vk <= 0xFE; ++vk)
+            {
+                if ((GetAsyncKeyState(vk) & 0x8000) != 0)
+                {
+                    anyDown = true;
+                    break;
+                }
+            }
+            if (!armed)
+            {
+                armed = !anyDown;
+            }
+            else if (anyDown)
+            {
+                _StartAuthThread();
+                return;
+            }
+            Sleep(30);
+        }
+    }
     GetAsyncKeyState(_hotkeyVk);
     bool wasDown = (GetAsyncKeyState(_hotkeyVk) & 0x8000) != 0;
     for (;;)
