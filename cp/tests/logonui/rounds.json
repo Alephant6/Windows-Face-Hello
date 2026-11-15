@@ -1,0 +1,54 @@
+[
+  {
+    "name": "r1-select-face-and-submit",
+    "register": true,
+    "autostart": false,
+    "expectUnlocked": true,
+    "actions": [
+      "sleep 2",
+      "click 512 400",
+      "sleep 3",
+      "shot 0-signin",
+      "click 512 500",
+      "sleep 2",
+      "shot 1-options",
+      "click 544 562",
+      "sleep 2",
+      "shot 2-face-selected",
+      "click 642 424",
+      "waitunlock 20"
+    ]
+  },
+  {
+    "name": "r2-relock-face-is-default",
+    "register": true,
+    "autostart": false,
+    "expectUnlocked": true,
+    "actions": [
+      "sleep 2",
+      "shot 0-curtain",
+      "click 512 400",
+      "sleep 3",
+      "shot 1-signin-default-method",
+      "click 642 440",
+      "waitunlock 20"
+    ]
+  },
+  {
+    "name": "r5-wrong-user",
+    "register": true,
+    "autostart": false,
+    "mockUser": "someoneelse",
+    "expectUnlocked": false,
+    "actions": [
+      "sleep 2",
+      "click 512 400",
+      "sleep 3",
+      "shot 0-signin",
+      "click 642 440",
+      "sleep 4",
+      "shot 1-after-submit",
+      "waitunlock 5"
+    ]
+  }
+]
