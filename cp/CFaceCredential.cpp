@@ -197,11 +197,27 @@ static int _ReadHotkeyVk()
     return 0;
 }
 
+// 可选开关:C:\ProgramData\FaceHello\autostart.txt 内容以 '1' 开头时,磁贴一被选中就自动
+// 开始第一次刷脸(不必再按「→」或热键)。文件不存在 = 关,保持「只由 → / 热键启动」的默认行为。
+// 只自动发起第一次;失败后的重试仍靠 → / 热键,不会循环开摄像头。
+static bool _ReadAutoStart()
+{
+    HANDLE h = CreateFileW(L"C:\\ProgramData\\FaceHello\\autostart.txt", GENERIC_READ,
+                           FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE)
+        return false;
+    char buf[4] = {};
+    DWORD read = 0;
+    const bool on = ReadFile(h, buf, sizeof(buf) - 1, &read, nullptr) && read >= 1 && buf[0] == '1';
+    CloseHandle(h);
+    return on;
+}
+
 CFaceCredential::CFaceCredential()
     : _cRef(1), _cpus(CPUS_INVALID), _autoLogon(nullptr),
       _pCredProvCredentialEvents(nullptr), _hAuthThread(nullptr), _hHotkeyThread(nullptr),
       _stopFlag(0), _hotkeyStopFlag(0), _authState(AuthState::Idle), _en(false),
-      _failCount(0), _hotkeyVk(0)
+      _failCount(0), _hotkeyVk(0), _autoStart(false)
 {
     ZeroMemory(_rgFieldStrings, sizeof(_rgFieldStrings));
     InitializeCriticalSection(&_cs);
@@ -248,6 +264,7 @@ HRESULT CFaceCredential::Initialize(CREDENTIAL_PROVIDER_USAGE_SCENARIO cpus, Aut
     }
     _en = _IsEnglishUI();  // 读一次语言镜像,贯穿本磁贴所有文案
     _hotkeyVk = _ReadHotkeyVk();
+    _autoStart = _ReadAutoStart();
     HRESULT hr = SHStrDupW(_L(L"面部解锁", L"Face Unlock"), &_rgFieldStrings[FFI_LABEL]);
     if (SUCCEEDED(hr))
     {
@@ -355,6 +372,11 @@ IFACEMETHODIMP CFaceCredential::SetSelected(BOOL* pbAutoLogon)
     EnterCriticalSection(&_cs);
     firstReady = (_authState == AuthState::Idle && _failCount == 0);
     LeaveCriticalSection(&_cs);
+    if (firstReady && _autoStart)
+    {
+        _StartAuthThread();  // 开关打开:选中即自动发起第一次刷脸
+        return S_OK;
+    }
     if (firstReady)
     {
         _SetStatus(_L(L"按 → 开始刷脸", L"Press → to start face unlock"));

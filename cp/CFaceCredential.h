@@ -91,4 +91,5 @@ private:
     std::wstring _boundUser;       // 绑定用户的本地账户名;空 = 不限定(Initialize 后只读)
     int _failCount;               // 已失败的刷脸次数(达 kMaxFaceAttempts 后停止重试,退回密码)
     int _hotkeyVk;
+    bool _autoStart;              // autostart.txt 开关:选中磁贴即自动发起第一次刷脸
 };
