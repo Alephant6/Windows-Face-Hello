@@ -1,30 +1,63 @@
 [
   {
-    "name": "r0-stock",
-    "register": false,
+    "name": "r1-select-face-and-submit",
+    "register": true,
     "autostart": false,
-    "expectUnlocked": null,
+    "expectUnlocked": true,
     "actions": [
-      "sleep 2", "shot 0-lock",
-      "click 512 400", "sleep 3", "shot 1-after-click",
-      "key TAB", "sleep 1", "shot 2-tab1",
-      "key TAB", "sleep 1", "shot 3-tab2"
+      "sleep 2", "click 512 400", "sleep 3", "shot 0-signin",
+      "click 512 500", "sleep 2", "shot 1-options",
+      "click 544 562", "sleep 2", "shot 2-face-selected",
+      "key TAB", "sleep 1", "shot 3-tab",
+      "key ENTER", "sleep 2", "shot 4-after-enter",
+      "waitunlock 20"
     ]
   },
   {
-    "name": "r1-usertile-look",
+    "name": "r2-relock-default",
     "register": true,
     "autostart": false,
     "expectUnlocked": null,
     "actions": [
-      "sleep 2", "shot 0-start",
-      "click 820 300", "sleep 1", "shot 1-after-click-empty",
-      "key TAB", "sleep 1", "shot 2-tab1",
-      "key TAB", "sleep 1", "shot 3-tab2",
-      "click 512 500", "sleep 2", "shot 4-after-click-signin-options",
-      "key TAB", "sleep 1", "shot 5-tab",
-      "key TAB", "sleep 1", "shot 6-tab",
-      "key TAB", "sleep 1", "shot 7-tab"
+      "sleep 2", "shot 0-curtain",
+      "click 512 400", "sleep 3", "shot 1-signin-default-method",
+      "key TAB", "sleep 1", "shot 2-tab",
+      "key ENTER", "sleep 2", "shot 3-after-enter",
+      "waitunlock 20"
+    ]
+  },
+  {
+    "name": "r3-autostart-one-input",
+    "register": true,
+    "autostart": true,
+    "expectUnlocked": null,
+    "actions": [
+      "sleep 2", "shot 0-curtain",
+      "click 512 400", "sleep 2", "shot 1-just-after-curtain",
+      "waitunlock 20"
+    ]
+  },
+  {
+    "name": "r4-autostart-no-input",
+    "register": true,
+    "autostart": true,
+    "expectUnlocked": null,
+    "actions": [
+      "sleep 25", "shot 0-after-25s-no-input",
+      "waitunlock 1"
+    ]
+  },
+  {
+    "name": "r5-wrong-user",
+    "register": true,
+    "autostart": false,
+    "mockUser": "someoneelse",
+    "expectUnlocked": false,
+    "actions": [
+      "sleep 2", "click 512 400", "sleep 3", "shot 0-signin",
+      "key TAB", "sleep 1",
+      "key ENTER", "sleep 4", "shot 1-after-submit",
+      "waitunlock 5"
     ]
   }
 ]
