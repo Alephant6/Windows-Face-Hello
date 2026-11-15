@@ -37,6 +37,99 @@ static HBITMAP _CreateSolidBitmap(int w, int h, COLORREF color)
     return hbmp;
 }
 
+// 内置默认图标:深灰蓝底 + 白色「扫脸」线条(四角取景框、双眼、微笑)。
+// 登录界面画这张图时不认透明通道(实测透明处显示为黑),所以用不透明底色;
+// 先在 512×512 上用粗线画,再 HALFTONE 缩小到目标尺寸,得到平滑边缘。
+// 任一步失败返回 nullptr,交由调用方退回纯色占位图。
+static HBITMAP _CreateDefaultIconBitmap(int w, int h)
+{
+    const int S = 512;
+    auto makeDib = [](int cx, int cy, void** bits) -> HBITMAP
+    {
+        BITMAPINFO bmi = {};
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = cx;
+        bmi.bmiHeader.biHeight = -cy; // 自上而下
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        return CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, bits, nullptr, 0);
+    };
+
+    void* bigBits = nullptr;
+    void* outBits = nullptr;
+    HBITMAP hBig = makeDib(S, S, &bigBits);
+    HBITMAP hOut = makeDib(w, h, &outBits);
+    HDC dcBig = CreateCompatibleDC(nullptr);
+    HDC dcOut = CreateCompatibleDC(nullptr);
+    if (!hBig || !hOut || !dcBig || !dcOut || !outBits)
+    {
+        if (hBig) DeleteObject(hBig);
+        if (hOut) DeleteObject(hOut);
+        if (dcBig) DeleteDC(dcBig);
+        if (dcOut) DeleteDC(dcOut);
+        return nullptr;
+    }
+
+    HGDIOBJ oldBig = SelectObject(dcBig, hBig);
+    HGDIOBJ oldOut = SelectObject(dcOut, hOut);
+
+    RECT all = { 0, 0, S, S };
+    HBRUSH background = CreateSolidBrush(RGB(0x2B, 0x34, 0x45));
+    FillRect(dcBig, &all, background);
+    DeleteObject(background);
+
+    LOGBRUSH lb = {};
+    lb.lbStyle = BS_SOLID;
+    lb.lbColor = RGB(255, 255, 255);
+    HPEN pen = ExtCreatePen(PS_GEOMETRIC | PS_SOLID | PS_ENDCAP_ROUND | PS_JOIN_ROUND, 34, &lb, 0, nullptr);
+    HGDIOBJ oldPen = SelectObject(dcBig, pen);
+    HGDIOBJ oldBrush = SelectObject(dcBig, GetStockObject(NULL_BRUSH));
+
+    // 四角取景框
+    const int a = 96, b = S - 96, L = 96;
+    const POINT corners[4][3] = {
+        { { a, a + L }, { a, a }, { a + L, a } },
+        { { b - L, a }, { b, a }, { b, a + L } },
+        { { b, b - L }, { b, b }, { b - L, b } },
+        { { a + L, b }, { a, b }, { a, b - L } },
+    };
+    for (const auto& c : corners)
+    {
+        Polyline(dcBig, c, 3);
+    }
+    // 双眼
+    MoveToEx(dcBig, 204, 204, nullptr);
+    LineTo(dcBig, 204, 244);
+    MoveToEx(dcBig, 308, 204, nullptr);
+    LineTo(dcBig, 308, 244);
+    // 微笑:椭圆下半段(默认逆时针,从左端画到右端)
+    Arc(dcBig, 176, 216, 336, 356, 186, 310, 326, 310);
+
+    SelectObject(dcBig, oldBrush);
+    SelectObject(dcBig, oldPen);
+    DeleteObject(pen);
+
+    SetStretchBltMode(dcOut, HALFTONE);
+    SetBrushOrgEx(dcOut, 0, 0, nullptr);
+    StretchBlt(dcOut, 0, 0, w, h, dcBig, 0, 0, S, S, SRCCOPY);
+    GdiFlush();
+
+    // GDI 不写 alpha:统一置为不透明。
+    DWORD* px = static_cast<DWORD*>(outBits);
+    for (int i = 0; i < w * h; ++i)
+    {
+        px[i] |= 0xFF000000;
+    }
+
+    SelectObject(dcBig, oldBig);
+    SelectObject(dcOut, oldOut);
+    DeleteDC(dcBig);
+    DeleteDC(dcOut);
+    DeleteObject(hBig);
+    return hOut;
+}
+
 // 用 WIC 解码 png/jpg/bmp,按短边居中裁成正方形(不拉伸变形)再缩放到 w×h,
 // 转成 top-down 32bpp 后返回 HBITMAP。
 // 任一步失败返回 nullptr,交由调用方回退纯色占位图。
@@ -706,11 +799,14 @@ IFACEMETHODIMP CFaceCredential::GetBitmapValue(DWORD dwFieldID, HBITMAP* phbmp)
 {
     if (dwFieldID == FFI_TILEIMAGE && phbmp)
     {
-        // 优先用 C:\ProgramData\FaceHello\ 里的自定义头像;读不到/解码失败回退纯蓝占位。
+        // 优先用 C:\ProgramData\FaceHello\ 里的自定义头像;读不到/解码失败用内置扫脸图标,
+        // 连它也画不出来才退回纯蓝占位。
         HBITMAP hbmp = nullptr;
         wchar_t imgPath[MAX_PATH];
         if (_FindFirstImageInFolder(L"C:\\ProgramData\\FaceHello\\", imgPath, ARRAYSIZE(imgPath)))
             hbmp = _LoadBitmapFromFileWIC(imgPath, 128, 128);
+        if (!hbmp)
+            hbmp = _CreateDefaultIconBitmap(128, 128);
         if (!hbmp)
             hbmp = _CreateSolidBitmap(128, 128, RGB(0, 120, 215)); // Windows 蓝
         if (hbmp)

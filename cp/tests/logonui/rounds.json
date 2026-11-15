@@ -9,17 +9,5 @@
       "click 512 500", "sleep 3", "shot 1-options",
       "click 544 562", "sleep 3", "shot 2-face-selected"
     ]
-  },
-  {
-    "name": "i2-icon-alpha",
-    "register": true,
-    "autostart": false,
-    "avatar": "alpha",
-    "expectUnlocked": null,
-    "actions": [
-      "sleep 5", "shot 0-signin",
-      "click 512 500", "sleep 3", "shot 1-options-a",
-      "click 512 530", "sleep 3", "shot 2-options-b"
-    ]
   }
 ]
