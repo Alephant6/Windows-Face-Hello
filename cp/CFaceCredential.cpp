@@ -231,13 +231,20 @@ CFaceCredential::~CFaceCredential()
     DllRelease();
 }
 
-HRESULT CFaceCredential::Initialize(CREDENTIAL_PROVIDER_USAGE_SCENARIO cpus, AutoLogonBridge* autoLogon)
+HRESULT CFaceCredential::Initialize(CREDENTIAL_PROVIDER_USAGE_SCENARIO cpus, AutoLogonBridge* autoLogon,
+                                    PCWSTR userSid, PCWSTR userName)
 {
     _cpus = cpus;
     _autoLogon = autoLogon;
     if (_autoLogon)
     {
         _autoLogon->AddRef();
+    }
+    // 两者都给才算绑定用户;只给其一按独立磁贴处理,避免出现「挂在用户下却不核对身份」的状态。
+    if (userSid && userSid[0] != L'\0' && userName && userName[0] != L'\0')
+    {
+        _userSid = userSid;
+        _boundUser = userName;
     }
     _en = _IsEnglishUI();  // 读一次语言镜像,贯穿本磁贴所有文案
     _hotkeyVk = _ReadHotkeyVk();
@@ -246,7 +253,34 @@ HRESULT CFaceCredential::Initialize(CREDENTIAL_PROVIDER_USAGE_SCENARIO cpus, Aut
     {
         hr = SHStrDupW(L"", &_rgFieldStrings[FFI_STATUS]);
     }
+    if (SUCCEEDED(hr))
+    {
+        hr = SHStrDupW(_L(L"面部解锁", L"Face Unlock"), &_rgFieldStrings[FFI_PROVIDER_LABEL]);
+    }
     return hr;
+}
+
+bool CFaceCredential::IsReadyToSubmit()
+{
+    EnterCriticalSection(&_cs);
+    const bool ready = (_authState == AuthState::Success);
+    LeaveCriticalSection(&_cs);
+    return ready;
+}
+
+// ICredentialProviderCredential2:返回绑定用户的 SID,LogonUI 据此把本磁贴并入该用户的账户。
+IFACEMETHODIMP CFaceCredential::GetUserSid(PWSTR* ppszSid)
+{
+    if (!ppszSid)
+    {
+        return E_INVALIDARG;
+    }
+    *ppszSid = nullptr;
+    if (_userSid.empty())
+    {
+        return S_FALSE;
+    }
+    return SHStrDupW(_userSid.c_str(), ppszSid);
 }
 
 // IUnknown
@@ -267,12 +301,21 @@ IFACEMETHODIMP_(ULONG) CFaceCredential::Release()
 
 IFACEMETHODIMP CFaceCredential::QueryInterface(REFIID riid, void** ppv)
 {
-    static const QITAB qit[] =
+    if (!ppv)
     {
-        QITABENT(CFaceCredential, ICredentialProviderCredential),
-        { nullptr },
-    };
-    return QISearch(this, qit, riid, ppv);
+        return E_POINTER;
+    }
+    *ppv = nullptr;
+    // ICredentialProviderCredential2 只在绑定了用户时才对外承认:不绑定用户的磁贴若也实现它,
+    // LogonUI 会把它并进「其他用户」,而不是原来那个独立磁贴。
+    if (riid == __uuidof(IUnknown) || riid == __uuidof(ICredentialProviderCredential) ||
+        (riid == __uuidof(ICredentialProviderCredential2) && !_userSid.empty()))
+    {
+        *ppv = static_cast<ICredentialProviderCredential2*>(this);
+        AddRef();
+        return S_OK;
+    }
+    return E_NOINTERFACE;
 }
 
 IFACEMETHODIMP CFaceCredential::Advise(ICredentialProviderCredentialEvents* pcpce)
@@ -498,6 +541,14 @@ void CFaceCredential::_AuthLoop()
         }
         if (success)
         {
+            // 绑定了用户的磁贴只接受该用户的脸:服务在整库里取最相似者,识别出的若是别人,
+            // 不能拿别人的身份去登录当前选中的账户。
+            if (!_boundUser.empty() && _wcsicmp(user.c_str(), _boundUser.c_str()) != 0)
+            {
+                _OnScanFailed(_L(L"刷脸未通过: 识别到的人脸不属于此账户",
+                                 L"Face check failed: the recognized face does not belong to this account"));
+                return;
+            }
             EnterCriticalSection(&_cs);
             _authUser = user;
             _authState = AuthState::Success;
