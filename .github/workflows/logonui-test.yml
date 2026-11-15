@@ -1,50 +1,93 @@
-name: LogonUI test
+name: CP tests
 
-# Runs the Credential Provider inside the real LogonUI of the hosted runner (Windows Server, same
-# LogonUI generation as Windows 11 24H2): cp/tests/logonui/driver.ps1 locks the console session and a
-# LocalSystem helper on the secure desktop captures screenshots and sends input. The face service is
-# the mock in cp/tests/mock_service.py.
+# One build of the Credential Provider DLL, then two independent checks of that same binary:
+#   harness  - cp/tests/harness.cpp calls the DLL the way LogonUI does (no sign-in screen).
+#   logonui  - cp/tests/logonui/driver.ps1 runs it inside the real LogonUI of the runner (Windows
+#              Server, same LogonUI generation as Windows 11 24H2): the console session is locked and
+#              a LocalSystem helper on the secure desktop takes screenshots and sends input.
+# The face service is replaced by cp/tests/mock_service.py in both.
 
 on:
   push:
     branches: ['ui/**']
 
 jobs:
-  logonui:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
-
       - name: Build Credential Provider DLL
         run: msbuild cp\FaceHelloCP.sln /p:Configuration=Release /p:Platform=x64 /m
+      - name: Set up MSVC command line
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Build harness
+        shell: cmd
+        run: cl /nologo /EHsc /std:c++17 /W4 /MT /Fe:harness.exe cp\tests\harness.cpp /link ole32.lib shlwapi.lib advapi32.lib gdi32.lib user32.lib
+      - name: Collect build output
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item cp\x64\Release\FaceHelloCP.dll, harness.exe out
+          (Get-FileHash out\FaceHelloCP.dll -Algorithm SHA256).Hash | Set-Content out\FaceHelloCP.dll.sha256
+          Get-Content out\FaceHelloCP.dll.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cp-build
+          path: out
+          if-no-files-found: error
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+  harness:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cp-build
+          path: out
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install pywin32
         run: python -m pip install --disable-pip-version-check pywin32
+      - name: Run harness as LocalSystem with the mock service
+        shell: pwsh
+        run: ./cp/tests/run-harness.ps1 -Dll out\FaceHelloCP.dll -Harness out\harness.exe
+      - name: Upload harness logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-logs
+          path: |
+            C:\fh-test\harness.log
+            C:\fh-test\harness.out
+          if-no-files-found: ignore
 
+  logonui:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cp-build
+          path: out
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pywin32
+        run: python -m pip install --disable-pip-version-check pywin32
       - name: Drive the real sign-in screen
         shell: pwsh
-        run: ./cp/tests/logonui/driver.ps1 -Dll cp\x64\Release\FaceHelloCP.dll -RoundsFile cp\tests\logonui\rounds.json
-
+        run: ./cp/tests/logonui/driver.ps1 -Dll out\FaceHelloCP.dll -RoundsFile cp\tests\logonui\rounds.json
       - name: Upload screenshots and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: logonui-out
           path: C:\fh-ui\out
-          if-no-files-found: ignore
-
-      - name: Upload DLL
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: FaceHelloCP-dll
-          path: cp/x64/Release/FaceHelloCP.dll
           if-no-files-found: ignore
