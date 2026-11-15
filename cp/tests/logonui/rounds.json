@@ -8,8 +8,7 @@
       "sleep 2", "click 512 400", "sleep 3", "shot 0-signin",
       "click 512 500", "sleep 2", "shot 1-options",
       "click 544 562", "sleep 2", "shot 2-face-selected",
-      "key TAB", "sleep 1", "shot 3-tab",
-      "key ENTER", "sleep 2", "shot 4-after-enter",
+      "click 642 424", "sleep 1", "shot 3-just-after-submit",
       "waitunlock 20"
     ]
   },
@@ -21,8 +20,7 @@
     "actions": [
       "sleep 2", "shot 0-curtain",
       "click 512 400", "sleep 3", "shot 1-signin-default-method",
-      "key TAB", "sleep 1", "shot 2-tab",
-      "key ENTER", "sleep 2", "shot 3-after-enter",
+      "click 642 424", "sleep 1", "shot 2-just-after-submit",
       "waitunlock 20"
     ]
   },
@@ -33,7 +31,7 @@
     "expectUnlocked": null,
     "actions": [
       "sleep 2", "shot 0-curtain",
-      "click 512 400", "sleep 2", "shot 1-just-after-curtain",
+      "click 512 400", "sleep 1", "shot 1-just-after-curtain",
       "waitunlock 20"
     ]
   },
@@ -43,7 +41,8 @@
     "autostart": true,
     "expectUnlocked": null,
     "actions": [
-      "sleep 25", "shot 0-after-25s-no-input",
+      "sleep 2", "shot 0-start",
+      "sleep 25", "shot 1-after-25s-no-input",
       "waitunlock 1"
     ]
   },
@@ -55,8 +54,7 @@
     "expectUnlocked": false,
     "actions": [
       "sleep 2", "click 512 400", "sleep 3", "shot 0-signin",
-      "key TAB", "sleep 1",
-      "key ENTER", "sleep 4", "shot 1-after-submit",
+      "click 642 424", "sleep 4", "shot 1-after-submit",
       "waitunlock 5"
     ]
   }
