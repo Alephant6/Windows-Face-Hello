@@ -6,11 +6,10 @@
     "expectUnlocked": null,
     "actions": [
       "sleep 2", "shot 0-lock",
-      "space", "sleep 3", "shot 1-signin",
-      "keys {TAB}", "sleep 1", "shot 2-tab1",
-      "keys {TAB}", "sleep 1", "shot 3-tab2",
-      "keys {TAB}", "sleep 1", "shot 4-tab3",
-      "keys {TAB}", "sleep 1", "shot 5-tab4"
+      "key SPACE", "sleep 3", "shot 1-signin",
+      "key TAB", "sleep 1", "shot 2-tab1",
+      "key TAB", "sleep 1", "shot 3-tab2",
+      "key TAB", "sleep 1", "shot 4-tab3"
     ]
   },
   {
@@ -20,13 +19,13 @@
     "expectUnlocked": null,
     "actions": [
       "sleep 2", "shot 0-lock",
-      "space", "sleep 3", "shot 1-signin",
-      "keys {TAB}", "sleep 1", "shot 2-tab1",
-      "keys {TAB}", "sleep 1", "shot 3-tab2",
-      "keys {TAB}", "sleep 1", "shot 4-tab3",
-      "keys {ENTER}", "sleep 2", "shot 5-enter-after-tab3",
-      "keys {TAB}", "sleep 1", "shot 6-tab",
-      "keys {TAB}", "sleep 1", "shot 7-tab"
+      "key SPACE", "sleep 3", "shot 1-signin",
+      "key TAB", "sleep 1", "shot 2-tab1",
+      "key TAB", "sleep 1", "shot 3-tab2",
+      "key TAB", "sleep 1", "shot 4-tab3",
+      "key ENTER", "sleep 2", "shot 5-enter-after-tab3",
+      "key TAB", "sleep 1", "shot 6-tab",
+      "key TAB", "sleep 1", "shot 7-tab"
     ]
   }
 ]
